@@ -10,7 +10,7 @@ import (
 func main() {
 	output, err := glm.GetImportablePackages()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to exec glm: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		os.Exit(1)
 	}
 

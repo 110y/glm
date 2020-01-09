@@ -3,9 +3,11 @@ package glm
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
-	"sync"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type mod struct {
@@ -29,20 +31,24 @@ func GetImportablePackages() ([]byte, error) {
 
 	results := make([][]byte, len(funcs))
 
-	wg := sync.WaitGroup{}
+	var eg errgroup.Group
 
 	for i, f := range funcs {
-		wg.Add(1)
-		go func(i int, f packageCollectorFunc) {
-			defer wg.Done()
+		i, f := i, f
+		eg.Go(func() error {
+			packages, err := f()
+			if err != nil {
+				return err
+			}
 
-			// TODO: handle error
-			packages, _ := f()
 			results[i] = packages
-		}(i, f)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
 
 	var output []byte
 	for _, result := range results {
@@ -81,26 +87,33 @@ func listModulePackages() ([]byte, error) {
 		return nil, err
 	}
 
-	wg := sync.WaitGroup{}
+	var eg errgroup.Group
 	list := make([][]byte, len(m.Require))
 
 	for i, req := range m.Require {
-		wg.Add(1)
-		go func(i int, path string) {
-			defer wg.Done()
+		i := i
+		req := req
+		eg.Go(func() error {
+			modfile := os.Getenv("MODFILE")
+			if modfile == "" {
+				modfile = "go.mod"
+			}
 
-			cmd := exec.Command("go", "list", "-mod=readonly", fmt.Sprintf("%s/...", path))
+			cmd := exec.Command("go", "list", fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", req.Path))
 			o, err := cmd.Output()
 			if err != nil {
 				list[i] = nil
-				return
+				return fmt.Errorf("failed to execute `go list`: %s", err.Error())
 			}
 
 			list[i] = o
-		}(i, req.Path)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
 
 	var res []byte
 	for _, r := range list {
