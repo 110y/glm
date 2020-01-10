@@ -99,7 +99,12 @@ func listModulePackages() ([]byte, error) {
 				modfile = "go.mod"
 			}
 
-			cmd := exec.Command("go", "list", fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", req.Path))
+			goExecutable := os.Getenv("GO_EXECUTABLE")
+			if goExecutable == "" {
+				goExecutable = "go"
+			}
+
+			cmd := exec.Command(goExecutable, "list", fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", req.Path))
 			o, err := cmd.Output()
 			if err != nil {
 				list[i] = nil
