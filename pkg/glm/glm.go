@@ -3,7 +3,6 @@ package glm
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"regexp"
 
@@ -94,21 +93,11 @@ func listModulePackages() ([]byte, error) {
 		i := i
 		req := req
 		eg.Go(func() error {
-			modfile := os.Getenv("MODFILE")
-			if modfile == "" {
-				modfile = "go.mod"
-			}
-
-			goExecutable := os.Getenv("GO_EXECUTABLE")
-			if goExecutable == "" {
-				goExecutable = "go"
-			}
-
-			cmd := exec.Command(goExecutable, "list", fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", req.Path))
+			cmd := exec.Command("go", "list", fmt.Sprintf("%s/...", req.Path))
 			o, err := cmd.Output()
 			if err != nil {
 				list[i] = nil
-				return fmt.Errorf("failed to execute `go list`: %s", err.Error())
+				return fmt.Errorf("failed to execute `go list` mod: %s, err:%s", req.Path, err.Error())
 			}
 
 			list[i] = o
