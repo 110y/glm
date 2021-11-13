@@ -113,33 +113,28 @@ func listModulePackages() ([]byte, error) {
 	list := make([][]byte, len(m.Require))
 
 	for i, req := range m.Require {
-		i := i
-		req := req
-		eg.Go(func() error {
-			cmd := exec.Command("go", "list", "-mod=mod", fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", req.Path))
+		cmd := exec.Command("go", "list", "-mod=mod", fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", req.Path))
 
-			pipe, err := cmd.StdoutPipe()
-			if err != nil {
-				return fmt.Errorf("failed to get stdout pipe of `go list`: %w", err)
-			}
-			defer pipe.Close()
+		pipe, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get stdout pipe of `go list`: %w", err)
+		}
+		defer pipe.Close()
 
-			grep := exec.Command("grep", grepArgs...)
-			grep.Stdin = pipe
+		grep := exec.Command("grep", grepArgs...)
+		grep.Stdin = pipe
 
-			if err = cmd.Start(); err != nil {
-				return fmt.Errorf("failed to start `go list` for third party mods: %w", err)
-			}
+		if err = cmd.Start(); err != nil {
+			return nil, fmt.Errorf("failed to start `go list` for third party mods: %w", err)
+		}
 
-			o, err := grep.Output()
-			if err != nil {
-				list[i] = nil
-				return fmt.Errorf("failed to execute `go list` mod: %s, err:%s, %s", req.Path, err.Error(), string(o))
-			}
+		o, err := grep.Output()
+		if err != nil {
+			list[i] = nil
+			return nil, fmt.Errorf("failed to execute `go list` mod: %s, err:%s, %s", req.Path, err.Error(), string(o))
+		}
 
-			list[i] = o
-			return nil
-		})
+		list[i] = o
 	}
 
 	if err := eg.Wait(); err != nil {
