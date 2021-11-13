@@ -3,11 +3,17 @@ package glm
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
-	"regexp"
 
 	"golang.org/x/sync/errgroup"
 )
+
+var grepArgs = []string{
+	"--invert-match",
+	"--extended-regexp",
+	".*?internal|^vendor",
+}
 
 type mod struct {
 	Require []*require
@@ -18,8 +24,6 @@ type require struct {
 }
 
 type packageCollectorFunc func() ([]byte, error)
-
-var usableStdPkgRegex = regexp.MustCompile("(^vendor|^.*?internal)")
 
 func GetImportablePackages() ([]byte, error) {
 	funcs := []packageCollectorFunc{
@@ -58,9 +62,23 @@ func GetImportablePackages() ([]byte, error) {
 }
 
 func listStandardPackages() ([]byte, error) {
-	o, err := exec.Command("go", "list", "std").Output()
+	cmd := exec.Command("go", "list", "std")
+	pipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get stdout pipe of `go list std`: %w", err)
+	}
+	defer pipe.Close()
+
+	grep := exec.Command("grep", grepArgs...)
+	grep.Stdin = pipe
+
+	if err = cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start `go list std`: %w", err)
+	}
+
+	o, err := grep.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to execut `go list std`: %w", err)
 	}
 
 	return o, nil
@@ -69,13 +87,18 @@ func listStandardPackages() ([]byte, error) {
 func listProjectPackages() ([]byte, error) {
 	o, err := exec.Command("go", "list", "./...").Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to execute `go list ./...`: %w", err)
 	}
 
 	return o, nil
 }
 
 func listModulePackages() ([]byte, error) {
+	modfile := os.Getenv("GLM_MOD_PATH")
+	if modfile == "" {
+		modfile = "./go.mod"
+	}
+
 	modsJSON, err := exec.Command("go", "mod", "edit", "-json").Output()
 	if err != nil {
 		return nil, err
@@ -93,11 +116,25 @@ func listModulePackages() ([]byte, error) {
 		i := i
 		req := req
 		eg.Go(func() error {
-			cmd := exec.Command("go", "list", fmt.Sprintf("%s/...", req.Path))
-			o, err := cmd.Output()
+			cmd := exec.Command("go", "list", "-mod=mod", fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", req.Path))
+
+			pipe, err := cmd.StdoutPipe()
+			if err != nil {
+				return fmt.Errorf("failed to get stdout pipe of `go list`: %w", err)
+			}
+			defer pipe.Close()
+
+			grep := exec.Command("grep", grepArgs...)
+			grep.Stdin = pipe
+
+			if err = cmd.Start(); err != nil {
+				return fmt.Errorf("failed to start `go list` for third party mods: %w", err)
+			}
+
+			o, err := grep.Output()
 			if err != nil {
 				list[i] = nil
-				return fmt.Errorf("failed to execute `go list` mod: %s, err:%s", req.Path, err.Error())
+				return fmt.Errorf("failed to execute `go list` mod: %s, err:%s, %s", req.Path, err.Error(), string(o))
 			}
 
 			list[i] = o
