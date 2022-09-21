@@ -110,7 +110,6 @@ func listModulePackages() ([]byte, error) {
 		return nil, err
 	}
 
-	var eg errgroup.Group
 	list := make([][]byte, len(m.Require))
 
 	isWorkspaceMode := false
@@ -148,10 +147,6 @@ func listModulePackages() ([]byte, error) {
 		list[i] = o
 	}
 
-	if err := eg.Wait(); err != nil {
-		return nil, err
-	}
-
 	var res []byte
 	for _, r := range list {
 		res = append(res, r...)
@@ -171,5 +166,12 @@ func createGoListForExternalModsCommand(mod, modfile string, isWorkspaceMode boo
 
 	args = append(args, fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", mod))
 
-	return exec.Command("go", args...)
+	cmd := exec.Command("go", args...)
+	cmd.Env = append(
+		os.Environ(),
+		"GOPROXY=direct",
+		"GOSUMDB=off",
+	)
+
+	return cmd
 }
