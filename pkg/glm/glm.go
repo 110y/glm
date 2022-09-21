@@ -2,6 +2,7 @@ package glm
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -112,8 +113,18 @@ func listModulePackages() ([]byte, error) {
 	var eg errgroup.Group
 	list := make([][]byte, len(m.Require))
 
+	isWorkspaceMode := false
+	_, err = os.Stat("./go.work")
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed to check go.work existence: %w", err)
+	}
+
+	if err == nil {
+		isWorkspaceMode = true
+	}
+
 	for i, req := range m.Require {
-		cmd := exec.Command("go", "list", "-mod=mod", fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", req.Path))
+		cmd := createGoListForExternalModsCommand(req.Path, modfile, isWorkspaceMode)
 
 		pipe, err := cmd.StdoutPipe()
 		if err != nil {
@@ -147,4 +158,18 @@ func listModulePackages() ([]byte, error) {
 	}
 
 	return res, nil
+}
+
+func createGoListForExternalModsCommand(mod, modfile string, isWorkspaceMode bool) *exec.Cmd {
+	args := []string{
+		"list",
+	}
+
+	if !isWorkspaceMode {
+		args = append(args, "-mod=mod")
+	}
+
+	args = append(args, fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", mod))
+
+	return exec.Command("go", args...)
 }
