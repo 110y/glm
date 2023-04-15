@@ -128,6 +128,10 @@ func listModulePackages() ([]byte, error) {
 			continue
 		}
 
+		if req.Path == "github.com/google/flatbuffers" {
+			continue
+		}
+
 		cmd := createGoListForExternalModsCommand(req.Path, modfile, isWorkspaceMode)
 
 		pipe, err := cmd.StdoutPipe()
