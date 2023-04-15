@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -123,6 +124,10 @@ func listModulePackages() ([]byte, error) {
 	}
 
 	for i, req := range m.Require {
+		if strings.Contains(req.Path, "/internal/") {
+			continue
+		}
+
 		cmd := createGoListForExternalModsCommand(req.Path, modfile, isWorkspaceMode)
 
 		pipe, err := cmd.StdoutPipe()
