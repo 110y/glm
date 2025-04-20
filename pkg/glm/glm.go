@@ -124,7 +124,7 @@ func listModulePackages() ([]byte, error) {
 	}
 
 	for i, req := range m.Require {
-		if strings.Contains(req.Path, "/internal/") {
+		if strings.Contains(req.Path, "/internal/") || strings.Contains(req.Path, "/example/") {
 			continue
 		}
 
@@ -176,11 +176,11 @@ func createGoListForExternalModsCommand(mod, modfile string, isWorkspaceMode boo
 	args = append(args, fmt.Sprintf("-modfile=%s", modfile), fmt.Sprintf("%s/...", mod))
 
 	cmd := exec.Command("go", args...)
-	cmd.Env = append(
-		os.Environ(),
-		"GOPROXY=direct",
-		"GOSUMDB=off",
-	)
+	// cmd.Env = append(
+	// os.Environ(),
+	// "GOPROXY=direct",
+	// "GOSUMDB=off",
+	// )
 
 	return cmd
 }
